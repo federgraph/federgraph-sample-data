@@ -1,0 +1,356 @@
+﻿<html>
+<head><title></title></head>
+<body>
+
+<h1>FC Sample</h1>
+
+<div id="shader-code"><pre>
+//vs.begin;
+
+cbuffer VSConsts: register(b0)
+{
+  float4x4 MVPMatrix;
+
+  float3 P1;
+  float Divi1;
+  float3 P2;
+  float Divi2;
+  float3 P3;
+  float Divi3;
+  float3 P4;
+  float Divi4;
+
+  float4 ParamL;
+  float4 ParamK;
+  float4 OptioM;
+  float4 TE;
+
+  float4 MP01;
+  float4 MP02;
+  float4 MP03;
+  float4 MP04;
+}
+
+struct VSInput
+{
+  float3 Pos: POSITION;
+};
+
+struct VSOutput
+{
+  float4 Pos: SV_POSITION;
+  float2 Tex: TEXCOORD;
+};
+
+//vs-calc.begin;
+float sqr(float x) { return x * x; }
+
+float Force(float k, float l, float l0, int m)
+{
+  float result;
+  if (Divi4 == 1.0)
+    result = k * (l - l0);
+  else
+    result = k * sqr(l - l0) / 50;
+  if (m == 1) result = max(result, 0);
+  if (m == 2) result = min(result, 0);
+  return result;
+}
+
+float Calc(float x, float y, int Plot)
+{
+//Calc3XX
+  float3 p = float3(x, y, 0.0f);
+  const float Epsilon = 0.0001f;
+
+  float3 p1 = P1.xyz;
+  float3 p2 = P2.xyz;
+  float3 p3 = P3.xyz;
+
+  float4 l = ParamL;
+  float4 k = ParamK;
+  int3 m;
+  m.x = OptioM.x;
+  m.y = OptioM.y;
+  m.z = OptioM.z;
+
+  float3 Offset = MP01.xyz;
+  float FaktorEQ = MP01.w;
+
+  bool SolutionMode = MP03.x;
+  bool WantGleich = MP03.y;
+  bool Vorzeichen = MP03.z;
+
+  float3 t;
+  t.x = length(p-p1);
+  t.y = length(p-p2);
+  t.z = length(p-p3);
+
+  float3 b;
+  float3 f;
+  float3 u;
+  float3 v;
+  float su;
+  float sv;
+  if (SolutionMode) {
+    b.x = t.y * t.z * (t.x-l.x) * k.x;
+    b.y = t.x * t.z * (t.y-l.y) * k.y;
+    b.z = t.x * t.y * (t.z-l.z) * k.z;
+
+    u.x = b.x * (x-p1.x);
+    u.y = b.y * (x-p2.x);
+    u.z = b.z * (x-p3.x);
+
+    v.x = b.x * (y-p1.y);
+    v.y = b.y * (y-p2.y);
+    v.z = b.z * (y-p3.y);
+
+    su = u.x + u.y + u.z;
+    sv = v.x + v.y + v.z;
+  }
+  else {
+    if (t.x > Epsilon && t.y > Epsilon && t.z > Epsilon)
+    {
+      f.x = Force(k.x, t.x, l.x, m.x);
+      f.y = Force(k.y, t.y, l.y, m.y);
+      f.z = Force(k.z, t.z, l.z, m.z);
+
+      u.x = f.x * (x-p1.x) / t.x;
+      u.y = f.y * (x-p2.x) / t.y;
+      u.z = f.z * (x-p3.x) / t.z;
+
+      v.x = f.x * (y-p1.y) / t.x;
+      v.y = f.y * (y-p2.y) / t.y;
+      v.z = f.z * (y-p3.y) / t.z;
+
+      su = (u.x + u.y + u.z) * 100000;
+      sv = (v.x + v.y + v.z) * 100000;
+    }
+    else
+    {
+      switch (Plot) {
+        case 11:
+          su = k.x * l.x * 1.5 * 100000;
+          sv = 0;
+          break;
+        default:
+          su = 0;
+          sv = 0;
+          break;
+      }
+    }
+  }
+  float g7 = 0;
+  switch (Plot) {
+    case  0: g7 = sv; break;
+    case  1:
+    if (SolutionMode)
+             g7 = (b.x + b.y + b.z) * 20;
+      else
+             g7 = (f.x + f.y + f.z) * 100000;
+      break;
+    case  2: g7 = sqrt(sqr(su) + sqr(sv)) + 5; break;
+    case  3: g7 = su + sv; break;
+//  case  4: Amount
+    case  5: g7 = abs(su + sv); break;
+//  case  6: g7 = Richtung; break;
+    case  7: g7 = abs(sv); break;
+//  case  8: Energy
+    case  9: g7 = su; break;
+    case 10: g7 = abs(su); break;
+    case 11: g7 = abs(su) + abs(sv); break;
+  }
+  return g7;
+}
+
+float3 CalcEG(float3 q, float yin)
+{
+  float eggx = TE.z;
+  float eggz = TE.w;
+  float3 p = float3(q.x, q.y, q.z);
+  float lpxy = length(p.xy);
+  float r = lpxy / MP02.w;
+  float pz = MP02.w * sqrt(1.0 - r * r);
+
+  //Flat Mesh
+  if (Divi3 == 1.0) p.z = Divi2;
+
+  //Dia Mesh
+  if (Divi3 == 2.0) p.z = Divi1 * lpxy;
+
+  //Kegel Mesh
+  if (Divi3 == 3.0) p.z = Divi1 * (MP02.w - lpxy);
+
+  //Kugel Mesh
+  if (Divi3 == 4.0) {
+    p.z = MP02.w * sqrt(1.0 - r * r);
+    p.z = Divi1 * max(p.z, 0.0);
+  }
+
+  //Egg Mesh
+  if (Divi3 == 5.0) {
+    float fx1 = (64 + eggx) / 100;
+    float fx2 = (14 + eggz) / 100 * yin;
+    float fx = fx1 + fx2;
+    float fz = fx;
+    p.x = fx * p.x;
+    p.z = pz;
+    p.z = Divi1 * fz * max(p.z, 0.0);
+  }
+
+  //Eli Mesh
+  if (Divi3 == 6.0) {
+    float fx = (64 + eggx) / 100;
+    float fz = fx;
+    p.x = fx * p.x;
+    p.z = pz;
+    p.z = Divi1 * fz * max(p.z, 0.0);
+  }
+
+  //Soap Mesh
+  if (Divi3 == 7.0) {
+    float fx = (74 + eggx) / 100;
+    float fz = (29 + eggz) / 100;
+    p.x = fx * p.x;
+    p.z = pz;
+    p.z = Divi1 * fz * max(p.z, 0.0);
+  }
+
+  return p;
+}
+//vs-calc.end;
+
+VSOutput VSMain(VSInput input)
+{
+  VSOutput o;
+  float OffsetX = MP01.x;
+  float OffsetY = MP01.y;
+  float OffsetZ = MP01.z;
+  float RangeX = MP02.w;
+  float RangeY = MP03.w;
+
+  int Scene = max(MP02.x, 0);
+  int Plot = max(MP02.y, 0);
+  int PlotFigure = max(MP02.z, 0);
+
+  bool PlusCap = MP04.x;
+  bool MinusCap = MP04.y;
+  float pcap = MP04.z;
+  float fcap = MP04.w;
+
+  float mcap = -pcap;
+  fcap = max(fcap, 1);
+
+  float x, y, z;
+  x = RangeX * input.Pos.x + OffsetX;
+  y = RangeY * input.Pos.y + OffsetY;
+  z = Calc(x, y, Plot);
+
+  z = z / fcap - OffsetZ;
+  if (PlusCap && z > pcap) z = pcap;
+  if (MinusCap && z < mcap) z = mcap;
+
+  float4 p = float4(x, y, z, 1.0);
+
+  float te1 = TE.x;
+  float te2 = TE.y;
+
+  o.Tex.x = (input.Pos.x + te1) / te2;
+  o.Tex.y = (z + te1) / te2;
+
+  float3 q = CalcEG(p.xyz, input.Pos.y);
+  p.x = q.x;
+  p.y = q.y;
+  p.z = q.z;
+
+  o.Pos = mul(MVPMatrix, p);
+  return o;
+};
+//vs.end;
+</pre></div>
+
+<div id="model-data"><pre>
+//model.begin;
+Version := 2;
+x1 := 64.95;
+x2 := -64.95;
+y1 := 37.5;
+y2 := 37.5;
+y3 := -75;
+l1 := 90;
+l2 := 90;
+l3 := 90;
+l4 := 90;
+Range := 40;
+Plot := 10;
+Figure := 2;
+Bitmap := 17;
+AngleX := 180.00;
+PosZ := 9.15;
+T1 := 11;
+T2 := 200;
+ShowCylinder := False;
+ShowDiameter := False;
+OrthoZoom := 0.36;
+Lux := True;
+Lux1 := True;
+//model.end;
+
+{ ColorInfo }
+
+//color.begin;
+BlindColorCount := 1;
+StripWidth := 1;
+BandWidth := 11;
+StandardColor := 16;
+WantContour := True;
+WantShirtColor := False;
+SquareBitmap := False;
+HorizontalBitmap := False;
+SquareSym := False;
+RandomPaint := False;
+StandardPaint := True;
+MonoPaint := False;
+
+//BandInfo := W-R-G-B;
+Bands[0] := '001-000-000-000';
+Bands[1] := '011-072-091-170';
+Bands[2] := '011-064-115-100';
+Bands[3] := '011-255-140-000';
+Bands[4] := '011-250-128-114';
+Bands[5] := '011-205-092-092';
+Bands[6] := '011-240-128-128';
+Bands[7] := '011-255-182-193';
+Bands[8] := '011-240-128-128';
+Bands[9] := '011-147-112-219';
+Bands[10] := '011-232-209-235';
+Bands[11] := '011-218-112-214';
+Bands[12] := '011-255-182-193';
+Bands[13] := '011-240-128-128';
+Bands[14] := '011-070-153-137';
+Bands[15] := '011-240-128-128';
+Bands[16] := '011-255-140-000';
+Bands[17] := '011-134-048-106';
+Bands[18] := '011-119-132-164';
+Bands[19] := '011-255-105-180';
+Bands[20] := '011-197-145-207';
+Bands[21] := '011-249-096-114';
+Bands[22] := '011-249-088-054';
+Bands[23] := '011-255-105-180';
+Bands[24] := '011-255-192-203';
+Bands[25] := '011-238-130-238';
+Bands[26] := '011-218-112-214';
+Bands[27] := '011-186-085-211';
+Bands[28] := '011-106-090-205';
+Bands[29] := '011-106-090-205';
+Bands[30] := '011-106-090-205';
+Bands[31] := '011-148-000-211';
+Bands[32] := '011-153-050-204';
+Bands[33] := '011-163-019-072';
+Bands[34] := '011-225-087-184';
+Bands[35] := '255-051-051-051';
+//color.end;
+</pre></div>
+
+</body>
+</html>
