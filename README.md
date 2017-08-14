@@ -25,6 +25,13 @@ Hlsl is used on Windows only.
 - Take it as an idea that seems to work.
 - We will need all three pieces of text data, also in the future.
 
+## imprinted
+Subfolder 'imprinted' holds png images with imprinted data.
+
+If you look at the first line of pixels in the image - the pixels appear reddish.
+The red channel of the pixel data has been overwritten to contains the model data of the image.
+You can drop the image onto the drop target of the application, and the app wil load the image.
+
 ## named
 A selection of text files with data for model and view parameters, and options.
 
