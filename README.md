@@ -1,4 +1,4 @@
-# sample-data
+# federgraph-sample-data
 Sample data for the Federgraph application.
 
 ## sub folders
